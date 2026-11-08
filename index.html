@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>POMCP — Planning under partial observability</title>
+  <meta name="description" content="An interactive demo of Partially Observable Monte-Carlo Planning (POMCP) on the classic Tiger problem." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23070a0f'/%3E%3Ccircle cx='32' cy='32' r='19' fill='%232dd4bf'/%3E%3Ccircle cx='32' cy='32' r='10' fill='%23070a0f'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#demo">Skip to demo</a>
+
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>POMCP<span class="brand-dim"> / belief-space planning</span></span>
+      </div>
+      <nav class="topnav" aria-label="Sections">
+        <a href="#demo">Demo</a>
+        <a href="#how">How it works</a>
+        <a href="#reference">Reference</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============================== HERO ============================== -->
+    <section class="hero wrap">
+      <div class="hero-kicker">Online planning under partial observability</div>
+      <h1>You can&rsquo;t see the tiger.<br /><em>You can still plan.</em></h1>
+      <p class="hero-lede">
+        POMCP searches over <strong>histories</strong> instead of states, using a particle
+        filter to represent what it believes and Monte-Carlo simulations to look ahead.
+        Watch it decide when to gather information &mdash; and when to commit.
+      </p>
+      <div class="hero-badges" aria-label="Key ideas">
+        <span class="pill"><i class="dot teal"></i> belief space</span>
+        <span class="pill"><i class="dot amber"></i> UCT over histories</span>
+        <span class="pill"><i class="dot violet"></i> particle filter</span>
+        <span class="pill quiet">Silver &amp; Veness, 2010</span>
+      </div>
+    </section>
+
+    <!-- ============================== DEMO ============================== -->
+    <section class="wrap demo-wrap" id="demo">
+      <div class="demo-grid">
+
+        <!-- ------------------------- SCENE ------------------------- -->
+        <section class="panel scene-panel" aria-labelledby="scene-title">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow">Environment</div>
+              <h2 id="scene-title">The Tiger Problem</h2>
+            </div>
+            <div class="episode-badge">Episode <span id="episode-num">1</span></div>
+          </div>
+
+          <p class="scene-intro">
+            A tiger is behind one of two doors. <b>Listening</b> costs 1 and is right 90%
+            of the time. Opening the wrong door costs 100; the right door pays 10.
+            Opening ends the episode.
+          </p>
+
+          <div class="hearing" id="hearing" aria-live="polite">
+            <span class="hearing-icon" id="hearing-icon" aria-hidden="true">◌</span>
+            <span id="hearing-text">waiting to listen</span>
+          </div>
+
+          <div class="doors">
+            <div class="door-wrap" id="door-left">
+              <div class="door-label">Left door</div>
+              <div class="door-stage">
+                <div class="door-interior">
+                  <span class="interior-icon" aria-hidden="true">✨</span>
+                  <span class="interior-note">safe</span>
+                </div>
+                <div class="door-front">
+                  <div class="door-window"><span class="mystery">?</span></div>
+                  <div class="door-moulding top"></div>
+                  <div class="door-moulding bottom"></div>
+                  <div class="door-knob"></div>
+                </div>
+              </div>
+              <div class="door-caption" id="caption-left">hidden</div>
+            </div>
+
+            <div class="door-wrap" id="door-right">
+              <div class="door-label">Right door</div>
+              <div class="door-stage">
+                <div class="door-interior">
+                  <span class="interior-icon" aria-hidden="true">✨</span>
+                  <span class="interior-note">safe</span>
+                </div>
+                <div class="door-front">
+                  <div class="door-window"><span class="mystery">?</span></div>
+                  <div class="door-moulding top"></div>
+                  <div class="door-moulding bottom"></div>
+                  <div class="door-knob"></div>
+                </div>
+              </div>
+              <div class="door-caption" id="caption-right">hidden</div>
+            </div>
+          </div>
+
+          <!-- Belief meter -->
+          <div class="belief">
+            <div class="belief-head">
+              <div>
+                <div class="eyebrow">Belief state</div>
+                <div class="belief-title">
+                  P(tiger behind <b>left</b>) <span id="belief-value">50.0%</span>
+                </div>
+              </div>
+              <div class="belief-alt">particles <span id="particle-value">50.0%</span></div>
+            </div>
+
+            <div class="belief-track" id="belief-track" role="img" aria-label="Belief that the tiger is behind the left door">
+              <div class="belief-fill" id="belief-fill"></div>
+              <div class="belief-zone left" id="zone-left"></div>
+              <div class="belief-zone right" id="zone-right"></div>
+              <div class="belief-threshold" id="threshold-left"></div>
+              <div class="belief-threshold" id="threshold-right"></div>
+              <div class="belief-marker exact" id="marker-exact" title="Exact Bayesian belief"></div>
+              <div class="belief-marker particle" id="marker-particle" title="Particle-filter estimate"></div>
+            </div>
+            <div class="belief-scale">
+              <span>0 &middot; sure right &middot; open left</span>
+              <span>listen</span>
+              <span>1 &middot; sure left &middot; open right</span>
+            </div>
+
+            <div class="particle-strip">
+              <div class="particle-dots" id="particle-dots" aria-hidden="true"></div>
+              <div class="particle-caption" id="particle-caption">1,000 particles &middot; 500 / 500</div>
+            </div>
+          </div>
+
+          <!-- Decision summary -->
+          <div class="decision" id="decision" aria-live="polite">
+            <span class="decision-dot" id="decision-dot"></span>
+            <div class="decision-copy">
+              <strong id="decision-title">POMCP is thinking&hellip;</strong>
+              <span id="decision-sub"></span>
+            </div>
+          </div>
+
+          <!-- Playback -->
+          <div class="playback">
+            <button class="btn primary" id="play" type="button">
+              <span class="btn-icon" id="play-icon" aria-hidden="true">▶</span>
+              <span id="play-label">Auto play</span>
+            </button>
+            <button class="btn" id="step" type="button">Step</button>
+            <button class="btn ghost" id="new-episode" type="button">New episode</button>
+            <label class="speed">
+              <span>Speed</span>
+              <input type="range" id="speed" min="1" max="5" value="3" />
+            </label>
+          </div>
+          <div class="keyhints">
+            <span><kbd>space</kbd> play / pause</span>
+            <span><kbd>S</kbd> step</span>
+            <span><kbd>N</kbd> new episode</span>
+          </div>
+
+          <!-- Episode outcome -->
+          <div class="outcome" id="outcome" hidden>
+            <div class="outcome-copy">
+              <strong id="outcome-title"></strong>
+              <span id="outcome-sub"></span>
+            </div>
+            <button class="btn small" id="next-episode" type="button">Next episode</button>
+          </div>
+
+          <!-- Timeline -->
+          <div class="timeline-wrap">
+            <div class="eyebrow">This episode</div>
+            <div class="timeline" id="timeline">
+              <span class="timeline-empty">No actions yet.</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ------------------------- PLANNER ------------------------- -->
+        <section class="panel planner-panel" aria-labelledby="planner-title">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow">Online planning</div>
+              <h2 id="planner-title">Inside the search</h2>
+            </div>
+            <div class="plan-meta" id="plan-meta">&mdash;</div>
+          </div>
+
+          <div class="q-block">
+            <div class="subhead">
+              <span>Root action values</span>
+              <span class="hint-inline">Q(h, a) from POMCP</span>
+            </div>
+            <div class="q-values" id="q-values"></div>
+            <p class="q-note">
+              Sampled estimates: ordering matters more than the absolute value.
+            </p>
+          </div>
+
+          <div class="tree-block">
+            <div class="subhead">
+              <span>Tree (histories, depth 2)</span>
+              <span class="hint-inline" id="tree-meta">&mdash;</span>
+            </div>
+            <div class="tree" id="tree">
+              <div class="tree-empty">The search tree appears after the first simulation.</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="exact-block">
+            <div class="subhead">
+              <span>Exact belief-state planner</span>
+              <span class="hint-inline">ground truth</span>
+            </div>
+            <div class="exact-top">
+              <div>
+                <div class="exact-action" id="exact-badge">listen</div>
+                <div class="exact-note" id="exact-note">solved by value iteration on a 501-point belief grid</div>
+              </div>
+              <div class="compare-badge" id="exact-compare">&mdash;</div>
+            </div>
+
+            <div class="exact-values" id="exact-values"></div>
+            <svg class="value-chart" id="value-chart" viewBox="0 0 380 154" role="img" aria-label="Exact optimal value as a function of belief"></svg>
+            <div class="chart-caption">
+              <span><i class="swatch line"></i> V*(b), exact</span>
+              <span><i class="swatch dot"></i> current belief</span>
+              <span id="threshold-note"></span>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="settings-block">
+            <div class="subhead">
+              <span>Algorithm settings</span>
+              <span class="hint-inline">applies next search</span>
+            </div>
+
+            <label class="slider-row" for="sims">
+              <span class="slider-label">Simulations per step <output id="sims-out">5,000</output></span>
+              <input type="range" id="sims" min="500" max="20000" step="500" value="5000" />
+            </label>
+
+            <label class="slider-row" for="exploration">
+              <span class="slider-label">Exploration constant <span class="mono">c</span> <output id="exploration-out">100</output></span>
+              <input type="range" id="exploration" min="10" max="200" step="5" value="100" />
+            </label>
+
+            <label class="slider-row" for="noise">
+              <span class="slider-label">Listen accuracy <output id="noise-out">90%</output></span>
+              <input type="range" id="noise" min="0.65" max="0.99" step="0.01" value="0.90" />
+            </label>
+
+            <label class="slider-row" for="gamma">
+              <span class="slider-label">Discount <span class="mono">γ</span> <output id="gamma-out">0.95</output></span>
+              <input type="range" id="gamma" min="0.85" max="0.99" step="0.01" value="0.95" />
+            </label>
+
+            <p class="settings-note">
+              Noise and discount changes start a fresh experiment. Lower the simulation
+              budget to see POMCP make mistakes.
+            </p>
+          </div>
+        </section>
+      </div>
+
+      <!-- ------------------------- STATS ------------------------- -->
+      <div class="lower-grid">
+        <section class="panel stats-panel" aria-labelledby="stats-title">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow">Performance</div>
+              <h2 id="stats-title">Run statistics</h2>
+            </div>
+            <button class="btn tiny ghost" id="reset-stats" type="button">Reset</button>
+          </div>
+
+          <div class="stat-grid">
+            <div class="stat"><span>Episodes</span><b id="stat-episodes">0</b></div>
+            <div class="stat"><span>Average return</span><b id="stat-avg">&mdash;</b></div>
+            <div class="stat"><span>Safe opens</span><b id="stat-safe">&mdash;</b></div>
+            <div class="stat"><span>Avg. listens</span><b id="stat-listens">&mdash;</b></div>
+            <div class="stat"><span>Matches exact action</span><b id="stat-agree">&mdash;</b></div>
+            <div class="stat"><span>Simulations run</span><b id="stat-sims">0</b></div>
+          </div>
+
+          <div class="returns-wrap">
+            <div class="subhead">
+              <span>Return per episode</span>
+              <span class="hint-inline" id="returns-note">last 30</span>
+            </div>
+            <svg class="returns-chart" id="return-chart" viewBox="0 0 680 180" role="img" aria-label="Return per episode"></svg>
+          </div>
+          <div class="chart-caption">
+            <span><i class="swatch green"></i> safe open</span>
+            <span><i class="swatch red"></i> tiger</span>
+            <span><i class="swatch dashed"></i> exact policy average</span>
+            <span>Opening ends the episode; listening costs 1 per step.</span>
+          </div>
+        </section>
+
+        <section class="panel notes-panel" aria-labelledby="notes-title">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow">Read the demo</div>
+              <h2 id="notes-title">What to notice</h2>
+            </div>
+          </div>
+          <ol class="notice-list">
+            <li>
+              <b>The action changes with belief.</b>
+              Near 50/50, POMCP listens. As the belief sharpens, its root value for
+              opening a door overtakes listening and it commits.
+            </li>
+            <li>
+              <b>The exact planner is the benchmark.</b>
+              The badge tells you whether POMCP&rsquo;s sampled action matches the
+              optimal action for the <em>same</em> belief. Sampling noise causes
+              occasional disagreement &mdash; and the occasional &minus;100.
+            </li>
+            <li>
+              <b>More simulations, more stable values.</b>
+              Drag simulations down to 500 and watch the Q-values wobble. The
+              tree is an anytime approximation.
+            </li>
+            <li>
+              <b>Information has a price.</b>
+              Each listen costs 1. Lower the discount or the listen accuracy and
+              the planner becomes more willing to gamble.
+            </li>
+          </ol>
+          <div class="callout">
+            <span class="callout-kicker">Try this</span>
+            Pause, open the settings, and set <b>listen accuracy</b> to 65%.
+            The tiger&rsquo;s whisper becomes nearly useless &mdash; does POMCP still
+            keep paying to listen?
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============================== HOW ============================== -->
+    <section class="wrap how" id="how">
+      <div class="section-head">
+        <div class="eyebrow">The algorithm</div>
+        <h2>How POMCP thinks</h2>
+        <p>
+          POMCP combines a particle filter, a generative model, and Monte-Carlo tree
+          search. The tree is indexed by <em>action&ndash;observation histories</em>, so
+          each node implicitly represents a belief.
+        </p>
+      </div>
+
+      <div class="how-grid">
+        <article class="how-card">
+          <span class="step">01</span>
+          <h3>Believe with particles</h3>
+          <p>
+            A belief is a set of sampled states. After acting and observing, propagate
+            each particle through the transition model, reweight it by how likely the
+            observation was, and resample.
+          </p>
+          <div class="formula">b&prime;(s&prime;) &prop; O(o | s&prime;, a) &sum;<sub>s</sub> T(s&prime; | s, a) b(s)</div>
+        </article>
+
+        <article class="how-card">
+          <span class="step">02</span>
+          <h3>Sample the future</h3>
+          <p>
+            The environment is a black-box simulator. From a particle, POMCP samples
+            transitions, observations and rewards. At a new history it falls back to a
+            random rollout.
+          </p>
+          <div class="formula">(s&prime;, o, r) ~ G(s, a)</div>
+        </article>
+
+        <article class="how-card">
+          <span class="step">03</span>
+          <h3>Grow a history tree</h3>
+          <p>
+            Each node is a history <span class="mono">h</span>. UCT selects actions,
+            observations branch the tree, and the mean return is backed up along the
+            visited path.
+          </p>
+          <div class="formula">a* = argmax<sub>a</sub> [ Q(h,a) + c &radic;( log N(h) / N(h,a) ) ]</div>
+        </article>
+
+        <article class="how-card">
+          <span class="step">04</span>
+          <h3>Act, observe, replan</h3>
+          <p>
+            After executing the best root action, the subtree for the received
+            observation becomes the new root. Planning continues online at every step;
+            no policy is ever stored offline.
+          </p>
+          <div class="formula">h &larr; h &middot; a &middot; o &nbsp;&nbsp; then sample more simulations</div>
+        </article>
+      </div>
+
+      <div class="pseudocode-wrap">
+        <div class="pseudocode-head">
+          <span>POMCP, stripped down</span>
+          <span class="mono">Silver &amp; Veness (2010)</span>
+        </div>
+        <pre class="pseudocode"><code><span class="c"># choose an action from the current belief</span>
+<span class="k">for</span> i = 1 .. N<span class="c">:</span>
+    s ~ B(h)                    <span class="c"># sample a particle</span>
+    Simulate(s, h, 0)
+<span class="k">return</span> argmax_a Q(h, a)
+
+<span class="k">function</span> Simulate(s, h, d):
+    <span class="k">if</span> h &notin; T<span class="c">:</span>
+        T[h] &larr; new node
+        <span class="k">return</span> Rollout(s, d)     <span class="c"># random playout</span>
+
+    a &larr; UCT(h)
+    s&prime;, o, r &larr; G(s, a)
+    R &larr; r + &gamma; &middot; Simulate(s&prime;, h&middot;a&middot;o, d+1)
+
+    N(h,a) += 1
+    Q(h,a) += (R &minus; Q(h,a)) / N(h,a)
+    <span class="k">return</span> R</code></pre>
+      </div>
+
+      <div class="why">
+        <h3>Why it works</h3>
+        <p>
+          POMCP replaces the intractable belief-state MDP with a sampled lookahead.
+          Because every simulation starts from a state drawn from the current belief,
+          the root values average over uncertainty. Because observations branch the
+          tree, the planner can reason about <em>future</em> information: &ldquo;listening
+          now is worth it because it will let me choose the right door later.&rdquo;
+          Tree reuse after each step turns one long planning problem into many small,
+          warm-started ones.
+        </p>
+        <p class="muted">
+          It is a Monte-Carlo method: finite simulations mean noisy values. The demo&rsquo;s
+          exact planner shows the action an oracle would pick for the same belief, which
+          makes POMCP&rsquo;s approximation error visible instead of hiding it.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================== REFERENCE ============================== -->
+    <section class="wrap reference" id="reference">
+      <div class="section-head">
+        <div class="eyebrow">Further reading</div>
+        <h2>References &amp; implementation</h2>
+      </div>
+      <div class="ref-grid">
+        <div class="ref-card">
+          <h3>Papers</h3>
+          <ul>
+            <li>
+              Silver, D. &amp; Veness, J. (2010).
+              <a href="https://papers.nips.cc/paper/4031-monte-carlo-planning-in-large-pomdps" target="_blank" rel="noopener">Monte-Carlo Planning in Large POMDPs</a>.
+              <em>NeurIPS</em>.
+            </li>
+            <li>
+              Kaelbling, L. P., Littman, M. L. &amp; Cassandra, A. R. (1998).
+              Planning and acting in partially observable stochastic domains.
+              <em>Artificial Intelligence</em>, 101, 99&ndash;134.
+            </li>
+            <li>
+              Sunberg, Z. &amp; Kochenderfer, M. J. (2018).
+              <a href="https://arxiv.org/abs/1709.06196" target="_blank" rel="noopener">Online algorithms for POMDPs with continuous state, action, and observation spaces</a>.
+            </li>
+          </ul>
+        </div>
+        <div class="ref-card">
+          <h3>This demo</h3>
+          <p>
+            The planner and Tiger model are a dependency-free JavaScript implementation
+            of POMCP. The exact benchmark is value iteration on a 501-point belief grid.
+            A separate reference implementation in Python mirrors the same algorithm.
+          </p>
+          <div class="file-list mono">
+            <span>index.html &middot; UI</span>
+            <span>js/pomcp-core.js &middot; planner + particle filter</span>
+            <span>js/tiger.js &middot; model + exact solver</span>
+            <span>python/pomcp.py &middot; reference implementation</span>
+          </div>
+        </div>
+      </div>
+      <p class="footnote">
+        Built as a teaching demo. No external libraries, fonts, or network calls.
+        The tiger problem is used with an episodic twist: opening a door ends the
+        episode, so a wrong open is a single catastrophic outcome rather than a reset.
+      </p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span>POMCP interactive demo</span>
+      <span class="mono">belief &rarr; sample &rarr; search &rarr; act</span>
+    </div>
+  </footer>
+
+  <script src="js/pomcp-core.js"></script>
+  <script src="js/tiger.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
